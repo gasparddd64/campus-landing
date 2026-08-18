@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 const COMMON_LANGUAGES = [
   "English", "French", "Spanish", "Mandarin", "Arabic", "Hindi",
@@ -12,7 +11,6 @@ const COMMON_LANGUAGES = [
 
 export default function OnboardingStep3() {
   const router = useRouter();
-  const supabase = createClient();
   const [languages, setLanguages] = useState<string[]>([]);
   const [originCountry, setOriginCountry] = useState("");
   const [originVisible, setOriginVisible] = useState(false);
@@ -38,63 +36,27 @@ export default function OnboardingStep3() {
       return;
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push("/");
-      return;
-    }
-
-    // Upsert profile
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: user.id,
-      campus_id,
-      display_name,
-      program: program || null,
-      languages,
-      origin_country: originCountry || null,
-      origin_country_visible: originVisible,
+    const res = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        campus_id,
+        intake_month,
+        intake_year,
+        display_name,
+        program: program || null,
+        languages,
+        origin_country: originCountry || null,
+        origin_country_visible: originVisible,
+      }),
     });
 
-    if (profileError) {
-      setError(profileError.message);
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error ?? "Something went wrong.");
       setLoading(false);
       return;
-    }
-
-    // Get or create cohort
-    const { data: cohort, error: cohortError } = await supabase
-      .from("cohorts")
-      .select("id")
-      .eq("campus_id", campus_id)
-      .eq("intake_month", intake_month)
-      .eq("intake_year", intake_year)
-      .maybeSingle();
-
-    let cohortId = cohort?.id;
-
-    if (!cohortId && !cohortError) {
-      const { data: newCohort, error: createError } = await supabase
-        .from("cohorts")
-        .insert({ campus_id, intake_month, intake_year })
-        .select("id")
-        .single();
-
-      if (createError) {
-        setError(createError.message);
-        setLoading(false);
-        return;
-      }
-      cohortId = newCohort.id;
-    }
-
-    // Assign to cohort
-    if (cohortId) {
-      await supabase
-        .from("cohort_members")
-        .upsert({ profile_id: user.id, cohort_id: cohortId });
     }
 
     sessionStorage.removeItem("onboarding");
@@ -110,9 +72,7 @@ export default function OnboardingStep3() {
           ))}
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Almost done
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Almost done</h1>
         <p className="text-gray-500 mb-8">
           These help others find people who speak their language.
           Everything here is optional.
@@ -171,19 +131,11 @@ export default function OnboardingStep3() {
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full"
-          >
+          <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? "Setting up your space…" : "Join my cohort →"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn-secondary w-full"
-          >
+          <button type="button" onClick={() => router.back()} className="btn-secondary w-full">
             Back
           </button>
         </form>
