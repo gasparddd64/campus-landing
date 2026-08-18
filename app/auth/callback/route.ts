@@ -8,34 +8,33 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/onboarding";
 
   const supabase = await createClient();
 
-  // PKCE OAuth flow (GitHub, Google, etc.)
+  // PKCE flow (OAuth or signInWithOtp from client)
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return afterAuth(supabase, origin, next);
+    if (!error) return afterAuth(supabase, origin);
   }
 
-  // Magic link / email OTP flow
+  // Email OTP token_hash flow
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type });
-    if (!error) return afterAuth(supabase, origin, next);
+    if (!error) return afterAuth(supabase, origin);
   }
 
-  return NextResponse.redirect(`${origin}/?error=auth`);
+  // Implicit flow: access_token is in the URL hash — handled client-side
+  // Redirect to the client handler page
+  return NextResponse.redirect(`${origin}/auth/confirm`);
 }
 
 async function afterAuth(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  origin: string,
-  next: string
+  origin: string
 ) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) return NextResponse.redirect(`${origin}/?error=auth`);
 
   const { data: profile } = await supabase
@@ -44,9 +43,7 @@ async function afterAuth(
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.campus_id) {
-    return NextResponse.redirect(`${origin}/home`);
-  }
-
-  return NextResponse.redirect(`${origin}${next}`);
+  return NextResponse.redirect(
+    `${origin}${profile?.campus_id ? "/home" : "/onboarding"}`
+  );
 }
