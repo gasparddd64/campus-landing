@@ -24,7 +24,7 @@ export default async function HomePage() {
     .eq("profile_id", user.id)
     .maybeSingle();
 
-  const cohort = cohortMember?.cohorts as
+  const cohort = (cohortMember?.cohorts as unknown) as
     | { intake_month: number; intake_year: number }
     | null;
 
