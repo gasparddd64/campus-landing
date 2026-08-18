@@ -58,6 +58,14 @@ export default function LandingPage() {
           ))}
         </div>
       </div>
+
+      <footer className="border-t border-gray-100 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 py-6 flex flex-wrap gap-6 text-xs text-gray-400 justify-center">
+          <a href="/privacy" className="hover:text-gray-600">Privacy</a>
+          <a href="/terms" className="hover:text-gray-600">Terms</a>
+          <a href="/guide/uva" className="hover:text-gray-600">Campus Guide</a>
+        </div>
+      </footer>
     </main>
   );
 }
