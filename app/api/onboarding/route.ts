@@ -1,9 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
+// Admin client bypasses RLS — only used server-side, never exposed to browser
+function getAdminClient() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
+export async function POST(request: Request) {
+  // Verify the user is authenticated via their session cookie
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -28,8 +38,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Upsert profile
-  const { error: profileError } = await supabase.from("profiles").upsert({
+  const admin = getAdminClient();
+
+  // Upsert profile (admin bypasses RLS, user identity verified above)
+  const { error: profileError } = await admin.from("profiles").upsert({
     id: user.id,
     campus_id,
     display_name,
@@ -46,7 +58,7 @@ export async function POST(request: Request) {
   // Get or create cohort
   let cohortId: string | null = null;
 
-  const { data: existing } = await supabase
+  const { data: existing } = await admin
     .from("cohorts")
     .select("id")
     .eq("campus_id", campus_id)
@@ -57,7 +69,7 @@ export async function POST(request: Request) {
   if (existing) {
     cohortId = existing.id;
   } else {
-    const { data: created, error: cohortError } = await supabase
+    const { data: created, error: cohortError } = await admin
       .from("cohorts")
       .insert({ campus_id, intake_month, intake_year })
       .select("id")
@@ -68,9 +80,8 @@ export async function POST(request: Request) {
     cohortId = created.id;
   }
 
-  // Assign to cohort
   if (cohortId) {
-    await supabase
+    await admin
       .from("cohort_members")
       .upsert({ profile_id: user.id, cohort_id: cohortId });
   }
